@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 # IMPORTANT: It is not secure to hardcode API keys in code.
 # Use Streamlit Secrets Management for production apps.
-API_KEY = st.secrets.get("API_KEY", "AIzaSyDB3Lz1yH2SLn-LzlE20z_DmGWazsKZgWM") # Fallback for local dev
+# Example: API_KEY = st.secrets["GEMINI_API_KEY"]
+API_KEY = "YOUR_API_KEY_HERE" # Replace with your actual key or use st.secrets
 
 # Set page config
 st.set_page_config(
@@ -527,6 +528,9 @@ def safe_execute(func, *args, **kwargs):
 def generate_ai_response(prompt: str, data: str) -> str:
     """Generates a response from the AI assistant with improved error handling"""
     try:
+        if not API_KEY or API_KEY == "YOUR_API_KEY_HERE":
+            return "AI Assistant is not configured. Please add your Gemini API Key to the script."
+
         if not data or data.strip() == "Empty DataFrame":
             student_info = "No student data available."
         else:
@@ -1083,7 +1087,7 @@ def settings_page(sgm):
         st.markdown("""
         ### Student Grade Management System
         
-        **Version:** 2.1 - Mobile Friendly  
+        **Version:** 2.2 - Final  
         **Built with:** Python, Streamlit, Plotly, Google Gemini AI  
         **Features:**
         - Complete student record management
@@ -1147,4 +1151,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
