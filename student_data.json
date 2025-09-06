@@ -1,0 +1,35 @@
+{
+  "STU001": {
+    "name": "Rahul Biswas",
+    "course": "Math",
+    "marks": 78.0,
+    "grade": "B+",
+    "gpa": 3.3,
+    "email": "",
+    "phone": "4657687980",
+    "date_added": "2025-08-29T11:09:32.543476",
+    "last_updated": "2025-08-29T11:13:42.638765"
+  },
+  "STU002": {
+    "name": "Rohit",
+    "course": "Aiml",
+    "marks": 98.0,
+    "grade": "A+",
+    "gpa": 4.0,
+    "email": "rohit@gmail.com",
+    "phone": "7383933464",
+    "date_added": "2025-08-29T11:10:08.088434",
+    "last_updated": "2025-08-29T11:13:43.845520"
+  },
+  "STU003": {
+    "name": "Soumojit",
+    "course": "7873",
+    "marks": 78.0,
+    "grade": "B+",
+    "gpa": 3.3,
+    "email": "soumojit@gmail.com",
+    "phone": "9478392729",
+    "date_added": "2025-09-02T20:52:09.385325",
+    "last_updated": "2025-09-02T20:52:09.385325"
+  }
+}
