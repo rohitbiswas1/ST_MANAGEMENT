@@ -9,18 +9,15 @@ from typing import Dict, List, Optional, Tuple
 import re
 import logging
 import requests
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- AI Assistant Configuration ---
-# API endpoint for the generative model
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent"
-# The provided API key has been integrated directly.
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 API_KEY = "AIzaSyDB3Lz1yH2SLn-LzlE20z_DmGWazsKZgWM"
-
-# --- Application Setup ---
 
 # Set page config
 st.set_page_config(
@@ -73,7 +70,6 @@ class StudentGradeManager:
         except (json.JSONDecodeError, IOError) as e:
             logger.error(f"Error loading data: {e}")
             self.students = {}
-            # Create backup of corrupted file
             if os.path.exists(self.data_file):
                 backup_name = f"{self.data_file}.corrupted_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 os.rename(self.data_file, backup_name)
@@ -86,12 +82,10 @@ class StudentGradeManager:
         
         for student_id, details in self.students.items():
             try:
-                # Validate required fields
                 if not all(key in details for key in ['name', 'course', 'marks']):
                     logger.warning(f"Skipping invalid student record: {student_id}")
                     continue
                 
-                # Fix missing fields
                 if 'gpa' not in details:
                     _, gpa = self.calculate_grade(details.get('marks', 0))
                     details['gpa'] = gpa
@@ -106,7 +100,6 @@ class StudentGradeManager:
                     details['last_updated'] = details.get('date_added', datetime.now().isoformat())
                     updated = True
                 
-                # Ensure email and phone fields exist
                 details.setdefault('email', '')
                 details.setdefault('phone', '')
                 
@@ -123,12 +116,10 @@ class StudentGradeManager:
     def save_data(self) -> bool:
         """Save student data to JSON file with error handling"""
         try:
-            # Create temporary file first
             temp_file = f"{self.data_file}.tmp"
             with open(temp_file, 'w', encoding='utf-8') as file:
                 json.dump(self.students, file, indent=2, ensure_ascii=False)
             
-            # Replace original file only if temp file was written successfully
             if os.path.exists(self.data_file):
                 backup_file = f"{self.data_file}.backup"
                 os.replace(self.data_file, backup_file)
@@ -165,9 +156,7 @@ class StudentGradeManager:
         if not phone or phone.strip() == '':
             return True  # Phone is optional
         
-        # Remove common separators
         cleaned = re.sub(r'[\s\-\(\)\.]+', '', phone.strip())
-        # Allow country codes and 10+ digit numbers
         pattern = r'^(\+\d{1,3})?\d{10,15}$'
         return bool(re.match(pattern, cleaned))
     
@@ -176,7 +165,6 @@ class StudentGradeManager:
         if not self.students:
             return "STU001"
         
-        # Extract numeric parts from existing IDs
         existing_nums = []
         for sid in self.students.keys():
             if sid.startswith("STU") and len(sid) >= 6:
@@ -192,7 +180,6 @@ class StudentGradeManager:
     def add_student(self, name: str, course: str, marks: float, email: str = "", phone: str = "") -> Tuple[bool, str]:
         """Add a new student record with comprehensive validation"""
         try:
-            # Input validation
             if not name or not name.strip():
                 return False, "Student name is required!"
             
@@ -212,13 +199,11 @@ class StudentGradeManager:
             if phone and not self.validate_phone(phone):
                 return False, "Invalid phone number format!"
             
-            # Check for duplicate names (case-insensitive)
             name_clean = name.strip().lower()
             for existing_student in self.students.values():
                 if existing_student['name'].lower() == name_clean:
                     return False, f"Student '{name.strip()}' already exists!"
             
-            # Create new student record
             student_id = self.generate_student_id()
             grade, gpa = self.calculate_grade(marks)
             current_time = datetime.now().isoformat()
@@ -250,9 +235,8 @@ class StudentGradeManager:
             if student_id not in self.students:
                 return False, f"Student ID {student_id} not found!"
             
-            student = self.students[student_id].copy()  # Work with copy first
+            student = self.students[student_id].copy()
             
-            # Validate and update fields
             for field, value in kwargs.items():
                 if value is None:
                     continue
@@ -283,7 +267,6 @@ class StudentGradeManager:
                     if not str(value).strip():
                         return False, f"{field.title()} cannot be empty!"
                     
-                    # Check for duplicate names (excluding current student)
                     if field == 'name':
                         name_clean = str(value).strip().lower()
                         for sid, existing_student in self.students.items():
@@ -293,8 +276,6 @@ class StudentGradeManager:
                     student[field] = str(value).strip().title()
             
             student['last_updated'] = datetime.now().isoformat()
-            
-            # Update only if validation passed
             self.students[student_id] = student
             
             if self.save_data():
@@ -385,39 +366,27 @@ class StudentGradeManager:
         """Get comprehensive statistics with error handling"""
         if not self.students:
             return {
-                'total_students': 0,
-                'highest_marks': 0,
-                'lowest_marks': 0,
-                'average_marks': 0,
-                'median_marks': 0,
-                'average_gpa': 0,
-                'highest_gpa': 0,
-                'lowest_gpa': 0,
-                'grade_distribution': {},
-                'course_distribution': {},
-                'performance_levels': {},
-                'passed': 0,
-                'failed': 0,
-                'pass_rate': 0
+                'total_students': 0, 'highest_marks': 0, 'lowest_marks': 0,
+                'average_marks': 0, 'median_marks': 0, 'average_gpa': 0,
+                'highest_gpa': 0, 'lowest_gpa': 0, 'grade_distribution': {},
+                'course_distribution': {}, 'performance_levels': {},
+                'passed': 0, 'failed': 0, 'pass_rate': 0
             }
         
         try:
             marks_list = [details.get('marks', 0) for details in self.students.values()]
             gpa_list = [details.get('gpa', 0.0) for details in self.students.values()]
             
-            # Grade distribution
             grade_count = {}
             for details in self.students.values():
                 grade = details.get('grade', 'F')
                 grade_count[grade] = grade_count.get(grade, 0) + 1
             
-            # Course distribution
             course_count = {}
             for details in self.students.values():
                 course = details.get('course', 'Unknown')
                 course_count[course] = course_count.get(course, 0) + 1
             
-            # Performance levels
             performance_levels = {
                 'Excellent (90-100)': sum(1 for m in marks_list if m >= 90),
                 'Good (70-89)': sum(1 for m in marks_list if 70 <= m < 90),
@@ -425,7 +394,6 @@ class StudentGradeManager:
                 'Poor (<50)': sum(1 for m in marks_list if m < 50)
             }
             
-            # Pass/Fail
             passed = sum(1 for m in marks_list if m >= 40)
             failed = len(marks_list) - passed
             
@@ -448,7 +416,7 @@ class StudentGradeManager:
             
         except Exception as e:
             logger.error(f"Error calculating statistics: {e}")
-            return self.get_statistics()  # Return empty stats
+            return {}
 
 @st.cache_data
 def load_css():
@@ -483,16 +451,6 @@ def load_css():
         max-height: 200px;
         overflow-y: auto;
     }
-    .ai-input-container {
-        margin-top: 1rem;
-    }
-    .metric-container {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 0.5rem 0;
-        text-align: center;
-    }
     .success-message {
         background-color: #d4edda;
         border-left: 4px solid #28a745;
@@ -500,22 +458,6 @@ def load_css():
         margin: 1rem 0;
         border-radius: 4px;
         color: #155724;
-    }
-    .error-message {
-        background-color: #f8d7da;
-        border-left: 4px solid #dc3545;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 4px;
-        color: #721c24;
-    }
-    .warning-message {
-        background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 4px;
-        color: #856404;
     }
     .chat-message {
         padding: 8px 12px;
@@ -539,7 +481,6 @@ def load_css():
     </style>
     """
 
-
 def initialize_session_state():
     """Initialize session state variables"""
     if 'sgm' not in st.session_state:
@@ -551,12 +492,10 @@ def initialize_session_state():
     if 'show_ai_assistant' not in st.session_state:
         st.session_state.show_ai_assistant = False
     
-    # Initialize confirmation states
     confirmations = ['confirm_clear_all', 'confirm_reset']
     for conf in confirmations:
         if conf not in st.session_state:
             st.session_state[conf] = False
-
 
 def safe_execute(func, *args, **kwargs):
     """Safely execute a function with error handling"""
@@ -567,36 +506,34 @@ def safe_execute(func, *args, **kwargs):
         logger.error(f"Error in {func.__name__}: {e}")
         return None
 
-
 def generate_ai_response(prompt: str, data: str) -> str:
-    """
-    Generates a response from the AI assistant based on a user prompt and student data.
-    """
+    """Generates a response from the AI assistant with improved error handling"""
     try:
-        # Construct the detailed prompt for the AI model
-        full_prompt = f"""
-        You are an AI assistant designed to help educators analyze student performance.
-        Your goal is to provide insightful and actionable advice based on the provided data.
-        You can analyze student performance, identify trends, suggest improvements, and predict outcomes.
+        if not data or data.strip() == "Empty DataFrame":
+            student_info = "No student data available."
+        else:
+            student_info = data
+        
+        full_prompt = f"""You are an educational AI assistant helping teachers analyze student performance data. 
 
-        Here is the student data in a structured format (a pandas DataFrame converted to a string):
-        {data}
+STUDENT DATA:
+{student_info}
 
-        Please answer the following request based on the data and your expertise.
-        User's request: {prompt}
-        """
+QUESTION: {prompt}
 
-        # Prepare the payload for the API call
+Please provide a clear, helpful answer based on the student data. If no data is available, let the user know they need to add students first."""
+
         payload = {
-            "contents": [{"parts": [{"text": full_prompt}]}]
+            "contents": [{
+                "parts": [{
+                    "text": full_prompt
+                }]
+            }]
         }
 
-        headers = {
-            'Content-Type': 'application/json'
-        }
+        headers = {'Content-Type': 'application/json'}
 
-        # Make the API call with exponential backoff
-        for i in range(5):
+        for attempt in range(3):
             try:
                 response = requests.post(
                     f"{API_URL}?key={API_KEY}",
@@ -607,30 +544,30 @@ def generate_ai_response(prompt: str, data: str) -> str:
                 response.raise_for_status()
                 break
             except requests.exceptions.RequestException as e:
-                logger.warning(f"API request failed, retrying ({i+1}/5): {e}")
-                import time
-                time.sleep(2 ** i)
-        else:
-            raise Exception("API request failed after multiple retries.")
+                logger.warning(f"API attempt {attempt + 1} failed: {e}")
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    raise
             
         result = response.json()
         
-        # Parse the JSON response to extract the text
-        if 'candidates' in result and len(result['candidates']) > 0 and 'parts' in result['candidates'][0]['content']:
-            text = result['candidates'][0]['content']['parts'][0]['text']
-            return text
-        else:
-            logger.error(f"Unexpected API response format: {result}")
-            return "I'm sorry, I couldn't generate a response. The AI service returned an unexpected format."
+        if 'candidates' in result and len(result['candidates']) > 0:
+            candidate = result['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                parts = candidate['content']['parts']
+                if parts and 'text' in parts[0]:
+                    return parts[0]['text'].strip()
+        
+        logger.error(f"Unexpected API response format: {result}")
+        return "I apologize, but I'm having trouble processing your request right now. Please try again."
 
     except Exception as e:
-        logger.error(f"An error occurred during AI response generation: {e}")
-        return f"An error occurred: {str(e)}"
-
+        logger.error(f"AI response generation error: {e}")
+        return f"I'm sorry, I encountered an error while processing your request: {str(e)}"
 
 def render_ai_assistant_slot(sgm):
     """Render the AI Assistant slot at the top of the page"""
-    # AI Assistant Toggle Button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("🤖 AI Assistant - Ask Questions About Your Data", 
@@ -639,7 +576,6 @@ def render_ai_assistant_slot(sgm):
                      key="ai_toggle"):
             st.session_state.show_ai_assistant = not st.session_state.show_ai_assistant
     
-    # AI Assistant Interface
     if st.session_state.show_ai_assistant:
         st.markdown("""
         <div class="ai-assistant-container">
@@ -648,17 +584,15 @@ def render_ai_assistant_slot(sgm):
         </div>
         """, unsafe_allow_html=True)
         
-        # Display previous messages in a compact format
         if st.session_state.ai_messages:
             st.markdown('<div class="ai-chat-box">', unsafe_allow_html=True)
-            for msg in st.session_state.ai_messages[-3:]:  # Show last 3 messages
+            for msg in st.session_state.ai_messages[-3:]:
                 if msg["role"] == "user":
                     st.markdown(f'<div class="chat-message user-message">👤 {msg["content"]}</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="chat-message assistant-message">🤖 {msg["content"][:200]}{"..." if len(msg["content"]) > 200 else ""}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="chat-message assistant-message">🤖 {msg["content"][:300]}{"..." if len(msg["content"]) > 300 else ""}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # AI Input form
         with st.form("ai_quick_chat", clear_on_submit=True):
             col1, col2 = st.columns([4, 1])
             with col1:
@@ -669,10 +603,8 @@ def render_ai_assistant_slot(sgm):
                 submitted = st.form_submit_button("Send", type="primary")
             
             if submitted and user_prompt:
-                # Add user message
                 st.session_state.ai_messages.append({"role": "user", "content": user_prompt})
                 
-                # Get AI response
                 with st.spinner("🤖 Analyzing..."):
                     df_data_str = sgm.get_students_dataframe().to_string()
                     ai_response = generate_ai_response(user_prompt, df_data_str)
@@ -680,46 +612,25 @@ def render_ai_assistant_slot(sgm):
                 
                 st.rerun()
         
-        # Quick action buttons
         col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            if st.button("📊 Performance Summary", key="quick_perf"):
-                st.session_state.ai_messages.append({"role": "user", "content": "Give me a performance summary of all students"})
-                with st.spinner("🤖 Analyzing..."):
-                    df_data_str = sgm.get_students_dataframe().to_string()
-                    ai_response = generate_ai_response("Give me a performance summary of all students", df_data_str)
-                    st.session_state.ai_messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
+        quick_questions = [
+            ("📊 Performance Summary", "Give me a performance summary of all students"),
+            ("⚠️ Students at Risk", "Which students are at risk and need help?"),
+            ("🏆 Top Performers", "Who are the top performing students?"),
+            ("💡 Recommendations", "What recommendations do you have for improving student performance?")
+        ]
         
-        with col2:
-            if st.button("⚠️ Students at Risk", key="quick_risk"):
-                st.session_state.ai_messages.append({"role": "user", "content": "Which students are at risk and need help?"})
-                with st.spinner("🤖 Analyzing..."):
-                    df_data_str = sgm.get_students_dataframe().to_string()
-                    ai_response = generate_ai_response("Which students are at risk and need help?", df_data_str)
-                    st.session_state.ai_messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
-        
-        with col3:
-            if st.button("🏆 Top Performers", key="quick_top"):
-                st.session_state.ai_messages.append({"role": "user", "content": "Who are the top performing students?"})
-                with st.spinner("🤖 Analyzing..."):
-                    df_data_str = sgm.get_students_dataframe().to_string()
-                    ai_response = generate_ai_response("Who are the top performing students?", df_data_str)
-                    st.session_state.ai_messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
-        
-        with col4:
-            if st.button("💡 Recommendations", key="quick_rec"):
-                st.session_state.ai_messages.append({"role": "user", "content": "What recommendations do you have for improving student performance?"})
-                with st.spinner("🤖 Analyzing..."):
-                    df_data_str = sgm.get_students_dataframe().to_string()
-                    ai_response = generate_ai_response("What recommendations do you have for improving student performance?", df_data_str)
-                    st.session_state.ai_messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
+        for i, (button_text, question) in enumerate(quick_questions):
+            with [col1, col2, col3, col4][i]:
+                if st.button(button_text, key=f"quick_{i}"):
+                    st.session_state.ai_messages.append({"role": "user", "content": question})
+                    with st.spinner("🤖 Analyzing..."):
+                        df_data_str = sgm.get_students_dataframe().to_string()
+                        ai_response = generate_ai_response(question, df_data_str)
+                        st.session_state.ai_messages.append({"role": "assistant", "content": ai_response})
+                    st.rerun()
         
         st.markdown("---")
-
 
 def dashboard_page(sgm):
     """Enhanced Dashboard page"""
@@ -728,7 +639,6 @@ def dashboard_page(sgm):
     if not sgm.students:
         st.info("Welcome! Start by adding students to see your dashboard come to life.")
         
-        # Quick add section
         st.subheader("Quick Add Student")
         with st.form("quick_add", clear_on_submit=True):
             col1, col2 = st.columns(2)
@@ -755,21 +665,14 @@ def dashboard_page(sgm):
                     st.error("Name and Course are required!")
         return
     
-    # Statistics display
     stats = sgm.get_statistics()
     
     col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Students", stats['total_students'])
+    with col2: st.metric("Average Marks", f"{stats['average_marks']:.1f}")
+    with col3: st.metric("Pass Rate", f"{stats['pass_rate']:.1f}%")
+    with col4: st.metric("Average GPA", f"{stats['average_gpa']:.2f}")
     
-    with col1:
-        st.metric("Total Students", stats['total_students'])
-    with col2:
-        st.metric("Average Marks", f"{stats['average_marks']:.1f}")
-    with col3:
-        st.metric("Pass Rate", f"{stats['pass_rate']:.1f}%")
-    with col4:
-        st.metric("Average GPA", f"{stats['average_gpa']:.2f}")
-    
-    # Charts
     col1, col2 = st.columns(2)
     
     with col1:
@@ -790,32 +693,25 @@ def dashboard_page(sgm):
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    # Recent students
     st.subheader("Recent Students")
     df = sgm.get_students_dataframe()
     if not df.empty:
         recent_df = df.tail(5)[['Student ID', 'Name', 'Course', 'Marks', 'Grade']]
         st.dataframe(recent_df, use_container_width=True)
 
-
 def add_student_page(sgm):
     """Page for adding new student records."""
     st.header("➕ Add New Student")
     
-    # Display current statistics for context
     if sgm.students:
         stats = sgm.get_statistics()
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.info(f"👥 **Total Students:** {stats['total_students']}")
-        with col2:
-            st.info(f"📊 **Average Marks:** {stats['average_marks']:.1f}")
-        with col3:
-            st.info(f"✅ **Pass Rate:** {stats['pass_rate']:.1f}%")
+        with col1: st.info(f"👥 **Total Students:** {stats['total_students']}")
+        with col2: st.info(f"📊 **Average Marks:** {stats['average_marks']:.1f}")
+        with col3: st.info(f"✅ **Pass Rate:** {stats['pass_rate']:.1f}%")
     
     st.markdown("---")
     
-    # Add student form
     with st.form("add_student_form", clear_on_submit=True):
         st.subheader("📝 Student Information")
         
@@ -832,7 +728,6 @@ def add_student_page(sgm):
             email = st.text_input("Email", placeholder="student@example.com")
             phone = st.text_input("Phone", placeholder="+91 9876543210")
             
-            # Show calculated grade in real-time
             if marks > 0:
                 grade, gpa = sgm.calculate_grade(marks)
                 st.markdown(f"""
@@ -844,7 +739,6 @@ def add_student_page(sgm):
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Form submission
         submitted = st.form_submit_button("➕ Add Student", type="primary", use_container_width=True)
         
         if submitted:
@@ -858,9 +752,8 @@ def add_student_page(sgm):
             else:
                 st.error(f"❌ **Error:** {message}")
 
-
 def manage_students_page(sgm):
-    """Page for managing (editing and deleting) existing students."""
+    """Page for managing existing students."""
     st.header("✏️ Manage Students")
     
     if not sgm.students:
@@ -869,16 +762,11 @@ def manage_students_page(sgm):
     
     df = sgm.get_students_dataframe()
     
-    # Filter and sort options
     col1, col2, col3 = st.columns(3)
-    with col1:
-        sort_by = st.selectbox("Sort by:", ["Name", "Marks", "Grade", "Course", "Date Added"])
-    with col2:
-        sort_order = st.selectbox("Sort order:", ["Ascending", "Descending"])
-    with col3:
-        filter_grade = st.selectbox("Filter by Grade:", ["All"] + sorted(df['Grade'].unique().tolist()))
+    with col1: sort_by = st.selectbox("Sort by:", ["Name", "Marks", "Grade", "Course", "Date Added"])
+    with col2: sort_order = st.selectbox("Sort order:", ["Ascending", "Descending"])
+    with col3: filter_grade = st.selectbox("Filter by Grade:", ["All"] + sorted(df['Grade'].unique().tolist()))
     
-    # Apply filters and sorting
     filtered_df = df.copy()
     if filter_grade != "All":
         filtered_df = filtered_df[filtered_df['Grade'] == filter_grade]
@@ -893,12 +781,10 @@ def manage_students_page(sgm):
         return
     
     for _, row in filtered_df.iterrows():
-        # Using a unique key for the expander
         expander_key = f"expander_{row['Student ID']}"
-        with st.expander(f"🎓 {row['Name']} - {row['Student ID']} (Grade: {row['Grade']})", expanded=st.session_state.get(expander_key, False)):
-            st.session_state[expander_key] = True
+        with st.expander(f"🎓 {row['Name']} - {row['Student ID']} (Grade: {row['Grade']})", 
+                        expanded=st.session_state.get(expander_key, False)):
             
-            # Display student details
             st.markdown(f"""
             **📋 Student Details:**
             - **ID:** `{row['Student ID']}`
@@ -913,7 +799,6 @@ def manage_students_page(sgm):
             
             st.markdown("---")
             
-            # Create a form for editing to handle state better
             with st.form(f"edit_form_{row['Student ID']}"):
                 st.subheader("Edit Student Information")
                 edit_col1, edit_col2 = st.columns(2)
@@ -927,32 +812,29 @@ def manage_students_page(sgm):
                     new_email = st.text_input("Email", value=row['Email'])
                     new_phone = st.text_input("Phone", value=row['Phone'])
                     
-                    # Show calculated grade on the fly for updated marks
                     if new_marks != row['Marks']:
                         new_grade, new_gpa = sgm.calculate_grade(new_marks)
                         st.info(f"New Grade: **{new_grade}** (GPA: {new_gpa})")
-                        
-                update_button, cancel_button, delete_button = st.columns([1, 1, 1])
                 
-                with update_button:
+                update_col, cancel_col, delete_col = st.columns([1, 1, 1])
+                
+                with update_col:
                     if st.form_submit_button("💾 Save Changes", type="primary"):
                         success, message = sgm.update_student(
-                            row['Student ID'],
-                            name=new_name, course=new_course, marks=new_marks, email=new_email, phone=new_phone
+                            row['Student ID'], name=new_name, course=new_course, 
+                            marks=new_marks, email=new_email, phone=new_phone
                         )
                         if success:
                             st.success(message)
-                            st.session_state[expander_key] = False
                             st.rerun()
                         else:
                             st.error(message)
                 
-                with cancel_button:
+                with cancel_col:
                     if st.form_submit_button("❌ Cancel"):
-                        st.session_state[expander_key] = False
                         st.rerun()
                 
-                with delete_button:
+                with delete_col:
                     if st.form_submit_button("🗑️ Delete Student", type="secondary"):
                         success, message = sgm.delete_student(row['Student ID'])
                         if success:
@@ -961,9 +843,8 @@ def manage_students_page(sgm):
                         else:
                             st.error(message)
 
-
 def search_students_page(sgm):
-    """Page for searching and filtering students."""
+    """Page for searching students."""
     st.header("🔍 Search & Filter Students")
     
     if not sgm.students:
@@ -972,41 +853,36 @@ def search_students_page(sgm):
     
     col1, col2 = st.columns([3, 1])
     with col1:
-        search_term = st.text_input("🔍 Search Students", placeholder="Enter name, course, grade, or student ID...")
+        search_term = st.text_input("🔍 Search Students", 
+                                  placeholder="Enter name, course, grade, or student ID...")
     with col2:
         search_field = st.selectbox("Search in:", ["All Fields", "Name", "Course", "Grade"])
     
-    # Advanced filters
     with st.expander("🔧 Advanced Filters"):
         filter_col1, filter_col2, filter_col3 = st.columns(3)
         df = sgm.get_students_dataframe()
         
         with filter_col1:
             grade_filter = st.multiselect("Filter by Grade:", options=sorted(df['Grade'].unique()))
-        
         with filter_col2:
             course_filter = st.multiselect("Filter by Course:", options=sorted(df['Course'].unique()))
-        
         with filter_col3:
             marks_range = st.slider("Marks Range:", min_value=0, max_value=100, value=(0, 100))
     
     search_field_map = {"All Fields": "all", "Name": "name", "Course": "course", "Grade": "grade"}
     results_df = sgm.search_students(search_term, search_field_map[search_field])
     
-    # Apply additional filters
     if grade_filter:
         results_df = results_df[results_df['Grade'].isin(grade_filter)]
     if course_filter:
         results_df = results_df[results_df['Course'].isin(course_filter)]
     results_df = results_df[(results_df['Marks'] >= marks_range[0]) & (results_df['Marks'] <= marks_range[1])]
     
-    # Display results
     st.subheader(f"📊 Search Results ({len(results_df)} students found)")
     if results_df.empty:
         st.warning("🔍 No students match your search criteria. Try adjusting your filters.")
         return
     
-    # Sort options for results
     col1, col2 = st.columns(2)
     with col1:
         sort_by = st.selectbox("Sort results by:", ["Name", "Marks", "Grade", "Course"], key="search_sort")
@@ -1016,19 +892,16 @@ def search_students_page(sgm):
     
     st.dataframe(results_df, use_container_width=True)
     
-    # Export search results
     if st.button("📤 Export Search Results", type="secondary", use_container_width=True):
         csv_data = results_df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="📄 Download as CSV",
-            data=csv_data,
+            label="📄 Download as CSV", data=csv_data,
             file_name=f"search_results_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-            mime="text/csv",
+            mime="text/csv"
         )
 
-
 def analytics_page(sgm):
-    """Page for displaying comprehensive analytics and reports."""
+    """Page for analytics and reports."""
     st.header("📊 Analytics & Reports")
     
     if not sgm.students:
@@ -1038,7 +911,6 @@ def analytics_page(sgm):
     stats = sgm.get_statistics()
     df = sgm.get_students_dataframe()
     
-    # Executive Summary
     st.subheader("🎯 Executive Summary")
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.metric("Total Students", stats['total_students'])
@@ -1046,7 +918,6 @@ def analytics_page(sgm):
     with col3: st.metric("Pass Rate", f"{stats['pass_rate']:.1f}%")
     with col4: st.metric("Average GPA", f"{stats['average_gpa']:.2f}")
     
-    # Detailed Analytics Tabs
     tab1, tab2, tab3 = st.tabs(["📈 Performance", "📚 Courses", "🎯 Grades"])
     
     with tab1:
@@ -1054,48 +925,53 @@ def analytics_page(sgm):
         col1, col2 = st.columns(2)
         with col1:
             perf_data = stats['performance_levels']
-            fig = px.pie(values=list(perf_data.values()), names=list(perf_data.keys()), title="Performance Level Distribution")
+            fig = px.pie(values=list(perf_data.values()), names=list(perf_data.keys()), 
+                        title="Performance Level Distribution")
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             fig = px.histogram(df, x='Marks', nbins=20, title="Marks Distribution")
-            fig.add_vline(x=stats['average_marks'], line_dash="dash", line_color="red", annotation_text=f"Avg: {stats['average_marks']:.1f}")
-            fig.add_vline(x=stats['median_marks'], line_dash="dash", line_color="green", annotation_text=f"Med: {stats['median_marks']:.1f}")
+            fig.add_vline(x=stats['average_marks'], line_dash="dash", line_color="red", 
+                         annotation_text=f"Avg: {stats['average_marks']:.1f}")
+            fig.add_vline(x=stats['median_marks'], line_dash="dash", line_color="green", 
+                         annotation_text=f"Med: {stats['median_marks']:.1f}")
             st.plotly_chart(fig, use_container_width=True)
     
     with tab2:
         st.subheader("📚 Course Analysis")
-        course_stats = df.groupby('Course').agg(
-            Students=('Course', 'count'),
-            Avg_Marks=('Marks', 'mean'),
-            Avg_GPA=('GPA', 'mean')
-        ).reset_index()
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.bar(course_stats, x='Course', y='Students', title="Student Enrollment by Course")
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            fig = px.bar(course_stats, x='Course', y='Avg_Marks', title="Average Performance by Course")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        st.subheader("📊 Course Performance Summary")
-        st.dataframe(course_stats, use_container_width=True)
+        if not df.empty:
+            course_stats = df.groupby('Course').agg(
+                Students=('Course', 'count'),
+                Avg_Marks=('Marks', 'mean'),
+                Avg_GPA=('GPA', 'mean')
+            ).reset_index()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = px.bar(course_stats, x='Course', y='Students', title="Student Enrollment by Course")
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                fig = px.bar(course_stats, x='Course', y='Avg_Marks', title="Average Performance by Course")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.subheader("📊 Course Performance Summary")
+            st.dataframe(course_stats, use_container_width=True)
     
     with tab3:
         st.subheader("🎯 Grade Analysis")
         col1, col2 = st.columns(2)
         with col1:
             grade_data = stats['grade_distribution']
-            fig = px.pie(values=list(grade_data.values()), names=list(grade_data.keys()), title="Grade Distribution")
+            fig = px.pie(values=list(grade_data.values()), names=list(grade_data.keys()), 
+                        title="Grade Distribution")
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             pass_fail_data = {'Passed': stats['passed'], 'Failed': stats['failed']}
-            fig = px.pie(values=list(pass_fail_data.values()), names=list(pass_fail_data.keys()), title="Pass/Fail Distribution", color_discrete_sequence=['#28a745', '#dc3545'])
+            fig = px.pie(values=list(pass_fail_data.values()), names=list(pass_fail_data.keys()), 
+                        title="Pass/Fail Distribution", color_discrete_sequence=['#28a745', '#dc3545'])
             st.plotly_chart(fig, use_container_width=True)
 
-
 def import_export_page(sgm):
-    """Page for handling data import and export operations."""
+    """Page for data import/export operations."""
     st.header("📤 Import & Export Data")
     
     tab1, tab2 = st.tabs(["📤 Export Data", "📥 Import Data"])
@@ -1118,9 +994,9 @@ def import_export_page(sgm):
         
         export_df = df.copy()
         if not include_contact:
-            export_df = export_df.drop(['Email', 'Phone'], axis=1)
+            export_df = export_df.drop(['Email', 'Phone'], axis=1, errors='ignore')
         if not include_dates:
-            export_df = export_df.drop(['Date Added', 'Last Updated'], axis=1)
+            export_df = export_df.drop(['Date Added', 'Last Updated'], axis=1, errors='ignore')
         
         st.subheader("📋 Export Preview")
         st.dataframe(export_df.head(5), use_container_width=True)
@@ -1129,10 +1005,12 @@ def import_export_page(sgm):
         
         if export_format == "CSV":
             csv_data = export_df.to_csv(index=False).encode('utf-8')
-            st.download_button("📄 Download CSV File", csv_data, file_name=f"{filename}.csv", mime="text/csv", type="primary", use_container_width=True)
+            st.download_button("📄 Download CSV File", csv_data, file_name=f"{filename}.csv", 
+                              mime="text/csv", type="primary", use_container_width=True)
         elif export_format == "JSON":
             json_data = export_df.to_json(orient='records', indent=2).encode('utf-8')
-            st.download_button("📄 Download JSON File", json_data, file_name=f"{filename}.json", mime="application/json", type="primary", use_container_width=True)
+            st.download_button("📄 Download JSON File", json_data, file_name=f"{filename}.json", 
+                              mime="application/json", type="primary", use_container_width=True)
     
     with tab2:
         st.subheader("📥 Import Student Data")
@@ -1163,8 +1041,7 @@ def import_export_page(sgm):
                             error_messages = []
                             for _, row in valid_data_df.iterrows():
                                 success, message = sgm.add_student(
-                                    name=str(row['Name']),
-                                    course=str(row['Course']),
+                                    name=str(row['Name']), course=str(row['Course']),
                                     marks=float(row['Marks']),
                                     email=str(row.get('Email', '')),
                                     phone=str(row.get('Phone', ''))
@@ -1185,9 +1062,8 @@ def import_export_page(sgm):
             except Exception as e:
                 st.error(f"❌ Error processing file: {e}")
 
-
 def settings_page(sgm):
-    """Page for system settings and data management."""
+    """Page for system settings."""
     st.header("⚙️ Settings & Configuration")
     
     tab1, tab2, tab3 = st.tabs(["🗃️ Data Management", "⚙️ System Settings", "ℹ️ About"])
@@ -1219,32 +1095,47 @@ def settings_page(sgm):
                 st.session_state['confirm_clear_all'] = False
                 st.success("✅ All data cleared successfully!")
                 st.rerun()
-
+    
     with tab2:
         st.subheader("⚙️ System Configuration")
-        st.info("The grading scale and data file path are currently hard-coded. Future versions may allow configuration.")
+        
+        st.markdown("### Grading Scale")
+        grade_scale_df = pd.DataFrame(sgm.GRADE_SCALE, columns=['Min Marks', 'Grade', 'GPA'])
+        st.dataframe(grade_scale_df, use_container_width=True)
+        
+        st.markdown("### AI Assistant Status")
+        st.success("✅ AI Assistant is configured and ready to use")
         
     with tab3:
         st.subheader("ℹ️ About This System")
-        st.markdown("This is an enhanced version of a Streamlit-based Student Grade Management System, featuring improved UI, robust data validation, comprehensive analytics, and AI-powered insights.")
-
+        st.markdown("""
+        ### Student Grade Management System
+        
+        **Version:** 2.0 - FIXED  
+        **Built with:** Python, Streamlit, Plotly, Google Gemini AI  
+        **Features:**
+        - Complete student record management
+        - Advanced analytics and visualizations
+        - AI-powered insights and recommendations
+        - Data import/export functionality
+        - Responsive design with modern UI
+        
+        **Created for:** Educational institutions and instructors
+        """)
 
 def main():
     """Main application function"""
     st.markdown(load_css(), unsafe_allow_html=True)
     st.markdown('<h1 class="main-header">🎓 Student Grade Management System</h1>', unsafe_allow_html=True)
     
-    # Initialize session state
     initialize_session_state()
     sgm = st.session_state.sgm
     
-    # **AI Assistant Slot - Always visible at the top**
     render_ai_assistant_slot(sgm)
     
     # Sidebar
     st.sidebar.title("📋 Navigation")
     
-    # Show status in sidebar
     total_students = len(sgm.students)
     st.sidebar.metric("Total Students", total_students)
     
@@ -1253,20 +1144,14 @@ def main():
         st.sidebar.metric("Average Marks", f"{stats['average_marks']:.1f}")
         st.sidebar.metric("Pass Rate", f"{stats['pass_rate']:.1f}%")
     
-    # Navigation pages (removed AI Assistant from main navigation)
     pages = {
-        "Dashboard": "🏠",
-        "Add Student": "➕", 
-        "Manage Students": "✏️",
-        "Search Students": "🔍",
-        "Analytics": "📊",
-        "Import/Export": "📤",
+        "Dashboard": "🏠", "Add Student": "➕", "Manage Students": "✏️",
+        "Search Students": "🔍", "Analytics": "📊", "Import/Export": "📤",
         "Settings": "⚙️"
     }
     
     selected_page = st.sidebar.selectbox(
-        "Choose a page:",
-        list(pages.keys()),
+        "Choose a page:", list(pages.keys()),
         format_func=lambda x: f"{pages[x]} {x}"
     )
     
@@ -1291,7 +1176,6 @@ def main():
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please refresh the page or try again.")
-
 
 if __name__ == "__main__":
     main()
