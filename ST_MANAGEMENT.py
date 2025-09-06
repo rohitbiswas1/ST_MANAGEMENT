@@ -17,13 +17,12 @@ logger = logging.getLogger(__name__)
 
 # --- AI Assistant Configuration ---
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-# Load the API key from Streamlit's secrets
+
+# Load the API key from Streamlit's secrets with error handling
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except (FileNotFoundError, KeyError):
-    st.error("GEMINI_API_KEY not found. Please add it to your Streamlit secrets.")
-    API_KEY = None # Set to None to handle the error gracefully
-
+    API_KEY = None # Set to None if key is not found
 
 # Set page config
 st.set_page_config(
@@ -541,8 +540,10 @@ def safe_execute(func, *args, **kwargs):
 
 def generate_ai_response(prompt: str, data: str) -> str:
     """Generates a response from the AI assistant with improved error handling"""
+    # Return a helpful message if the API key is not configured
     if not API_KEY:
-        return "AI Assistant is disabled. Please configure the GEMINI_API_KEY in your Streamlit secrets."
+        return "AI Assistant is disabled. Please configure the `GEMINI_API_KEY` in your Streamlit secrets to enable this feature."
+
     try:
         if not data or data.strip() == "Empty DataFrame":
             student_info = "No student data available."
@@ -603,6 +604,10 @@ Please provide a clear, helpful answer based on the student data. If no data is 
 
 def render_ai_assistant_slot(sgm):
     """Render the AI Assistant slot at the top of the page"""
+    # Disable the AI assistant if the API key is not available
+    if not API_KEY:
+        return
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("🤖 AI Assistant - Ask Questions About Your Data", 
@@ -734,7 +739,6 @@ def dashboard_page(sgm):
     st.subheader("Recent Students")
     df = sgm.get_students_dataframe()
     if not df.empty:
-        # On smaller screens, st.dataframe can cause horizontal scrolling. Let's select key columns.
         cols_to_show = ['Student ID', 'Name', 'Course', 'Marks', 'Grade']
         recent_df = df.sort_values(by='Date Added', ascending=False).head(5)[cols_to_show]
         st.dataframe(recent_df, use_container_width=True)
@@ -1115,14 +1119,14 @@ def settings_page(sgm):
         if API_KEY:
             st.success("✅ AI Assistant is configured and ready.")
         else:
-            st.error("❌ AI Assistant is disabled. Add GEMINI_API_KEY to your secrets.")
+            st.error("❌ AI Assistant is disabled. Add `GEMINI_API_KEY` to your Streamlit secrets.")
         
     with tab3:
         st.subheader("ℹ️ About This System")
         st.markdown("""
         ### Student Grade Management System
         
-        **Version:** 2.1 (Mobile Optimized)
+        **Version:** 2.2 (FIXED)
         **Built with:** Python, Streamlit, Plotly, Google Gemini AI
         - Complete student record management
         - Advanced analytics and visualizations
@@ -1138,6 +1142,10 @@ def main():
     st.markdown(load_css(), unsafe_allow_html=True)
     st.markdown('<h1 class="main-header">🎓 Student Grade Management System</h1>', unsafe_allow_html=True)
     
+    # Show a persistent warning at the top if the API key is not set.
+    if not API_KEY:
+        st.warning("⚠️ **AI Assistant is disabled.** To enable it, please add your `GEMINI_API_KEY` to your Streamlit secrets. See the 'Settings' page for more info.")
+
     initialize_session_state()
     sgm = st.session_state.sgm
     
@@ -1160,9 +1168,10 @@ def main():
         "Settings": "⚙️"
     }
     
-    page_keys = list(pages.keys())
-    selected_page = st.sidebar.radio(
-        "Choose a page:", page_keys,
+    # Using selectbox for navigation to avoid rendering issues.
+    selected_page = st.sidebar.selectbox(
+        "Choose a page:",
+        list(pages.keys()),
         format_func=lambda x: f"{pages[x]} {x}"
     )
     
