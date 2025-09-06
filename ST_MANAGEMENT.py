@@ -1,5 +1,3 @@
-# ST_MANAGEMENT.py - Corrected Version
-
 import streamlit as st
 import pandas as pd
 import json
@@ -20,11 +18,11 @@ logger = logging.getLogger(__name__)
 # --- AI Assistant Configuration ---
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
-# Load the API key from Streamlit's secrets with error handling
+# Securely load the API key from Streamlit's secrets
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except (FileNotFoundError, KeyError):
-    API_KEY = None # Set to None if key is not found
+    API_KEY = None # Set to None if key is not found, allowing the app to run without AI features
 
 # Set page config
 st.set_page_config(
@@ -1032,167 +1030,3 @@ def import_export_page(sgm):
                 json_data = export_df.to_json(orient='records', indent=2).encode('utf-8')
                 st.download_button("📄 Download as JSON", json_data, file_name=f"{filename}.json", 
                                   mime="application/json", type="primary", use_container_width=True)
-    
-    with tab2:
-        st.subheader("📥 Import Student Data")
-        st.info("**📋 Import Requirements:**\n- File must be CSV with `Name`, `Course`, `Marks`.\n- Optional columns: `Email`, `Phone`.")
-        
-        uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
-        
-        if uploaded_file:
-            try:
-                import_df = pd.read_csv(uploaded_file)
-                st.subheader("📊 Import Preview")
-                st.dataframe(import_df.head(), use_container_width=True)
-                
-                required_cols = {'Name', 'Course', 'Marks'}
-                if not required_cols.issubset(import_df.columns):
-                    st.error(f"❌ Missing required columns: {', '.join(required_cols - set(import_df.columns))}")
-                else:
-                    valid_data_df = import_df.dropna(subset=['Name', 'Course', 'Marks']).copy()
-                    valid_data_df = valid_data_df[(valid_data_df['Marks'] >= 0) & (valid_data_df['Marks'] <= 100)]
-                    
-                    if valid_data_df.empty:
-                        st.warning("No valid rows found to import.")
-                    elif st.button(f"📥 Import {len(valid_data_df)} Students", type="primary"):
-                        with st.spinner("Importing data..."):
-                            success_count = 0
-                            error_messages = []
-                            for _, row in valid_data_df.iterrows():
-                                success, message = sgm.add_student(
-                                    name=str(row['Name']), course=str(row['Course']),
-                                    marks=float(row['Marks']),
-                                    email=str(row.get('Email', '')),
-                                    phone=str(row.get('Phone', ''))
-                                )
-                                if success:
-                                    success_count += 1
-                                else:
-                                    error_messages.append(f"Row '{row['Name']}': {message}")
-                                
-                        st.success(f"✅ Successfully imported {success_count} students!")
-                        if error_messages:
-                            with st.expander(f"⚠️ {len(error_messages)} students could not be imported. See errors."):
-                                for error in error_messages:
-                                    st.write(f"- {error}")
-                        st.balloons()
-                        st.rerun()
-            except Exception as e:
-                st.error(f"❌ Error processing file: {e}")
-
-def settings_page(sgm):
-    """Page for system settings."""
-    st.header("⚙️ Settings & Configuration")
-    
-    tab1, tab2, tab3 = st.tabs(["🗃️ Data Management", "⚙️ System", "ℹ️ About"])
-    
-    with tab1:
-        st.subheader("🗃️ Data Management")
-        
-        if sgm.students:
-            stats = sgm.get_statistics()
-            st.info(f"📈 **Database Stats:** {stats['total_students']} students in `{sgm.data_file}`")
-        else:
-            st.info("📝 No student data found.")
-            
-        st.markdown("---")
-        
-        st.subheader("⚠️ Dangerous Operations")
-        st.warning("These operations cannot be undone. Please be careful!")
-        
-        if st.button("🗑️ Clear All Data", type="secondary", use_container_width=True):
-            st.session_state['confirm_clear_all'] = True
-            
-        if st.session_state.get('confirm_clear_all'):
-            st.error("⚠️ **Warning:** This will delete ALL student data permanently!")
-            if st.button("I'm Sure, Clear ALL Data", type="primary"):
-                sgm.students = {}
-                sgm.save_data()
-                st.session_state['confirm_clear_all'] = False
-                st.success("✅ All data cleared successfully!")
-                st.rerun()
-    
-    with tab2:
-        st.subheader("⚙️ System Configuration")
-        st.markdown("### Grading Scale")
-        st.dataframe(pd.DataFrame(sgm.GRADE_SCALE, columns=['Min Marks', 'Grade', 'GPA']), use_container_width=True)
-        
-        st.markdown("### AI Assistant Status")
-        if API_KEY:
-            st.success("✅ AI Assistant is configured and ready.")
-        else:
-            st.error("❌ AI Assistant is disabled. Add `GEMINI_API_KEY` to your Streamlit secrets.")
-        
-    with tab3:
-        st.subheader("ℹ️ About This System")
-        st.markdown("""
-        ### Student Grade Management System
-        
-        **Version:** 2.2 (FIXED)
-        **Built with:** Python, Streamlit, Plotly, Google Gemini AI
-        - Complete student record management
-        - Advanced analytics and visualizations
-        - AI-powered insights and recommendations
-        - Data import/export functionality
-        - Responsive design for Desktop & Mobile
-        
-        **Created for:** Educational institutions and instructors.
-        """)
-
-def main():
-    """Main application function"""
-    st.markdown(load_css(), unsafe_allow_html=True)
-    st.markdown('<h1 class="main-header">🎓 Student Grade Management System</h1>', unsafe_allow_html=True)
-    
-    # Show a persistent warning at the top if the API key is not set.
-    if not API_KEY:
-        st.warning("⚠️ **AI Assistant is disabled.** To enable it, please add your `GEMINI_API_KEY` to your Streamlit secrets. See the 'Settings' page for more info.")
-
-    initialize_session_state()
-    sgm = st.session_state.sgm
-    
-    render_ai_assistant_slot(sgm)
-    
-    # Sidebar
-    st.sidebar.title("📋 Navigation")
-    
-    total_students = len(sgm.students)
-    st.sidebar.metric("Total Students", total_students)
-    
-    if sgm.students:
-        stats = sgm.get_statistics()
-        st.sidebar.metric("Average Marks", f"{stats['average_marks']:.1f}")
-        st.sidebar.metric("Pass Rate", f"{stats['pass_rate']:.1f}%")
-    
-    pages = {
-        "Dashboard": "🏠", "Add Student": "➕", "Manage Students": "✏️",
-        "Search Students": "🔍", "Analytics": "📊", "Import/Export": "📤",
-        "Settings": "⚙️"
-    }
-    
-    # Using selectbox for navigation to avoid rendering issues.
-    selected_page = st.sidebar.selectbox(
-        "Choose a page:",
-        list(pages.keys()),
-        format_func=lambda x: f"{pages[x]} {x}"
-    )
-    
-    # Page routing dictionary for cleaner code
-    page_functions = {
-        "Dashboard": dashboard_page,
-        "Add Student": add_student_page,
-        "Manage Students": manage_students_page,
-        "Search Students": search_students_page,
-        "Analytics": analytics_page,
-        "Import/Export": import_export_page,
-        "Settings": settings_page,
-    }
-    
-    # Execute the selected page's function
-    if selected_page in page_functions:
-        safe_execute(page_functions[selected_page], sgm)
-    else:
-        st.error("Page not found!")
-
-if __name__ == "__main__":
-    main()
