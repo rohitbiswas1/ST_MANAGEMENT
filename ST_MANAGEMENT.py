@@ -422,14 +422,15 @@ class StudentGradeManager:
 
 @st.cache_data
 def load_css():
-    """Load custom CSS styles with mobile-friendly adjustments"""
+    """Load custom CSS styles with a reliable system font stack to prevent rendering issues."""
     return """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    
+    /* --- REMOVED GOOGLE FONT IMPORT TO PREVENT LOADING ERRORS --- */
+
     /* --- General Styles --- */
     html, body, [class*="st-"] {
-        font-family: 'Inter', sans-serif;
+        /* --- UPDATED: Use a system-safe font stack for maximum compatibility --- */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     }
     .main-header {
         font-size: 2.5rem;
@@ -1146,3 +1147,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
