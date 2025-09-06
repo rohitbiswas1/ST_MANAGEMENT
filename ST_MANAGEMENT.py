@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 # --- AI Assistant Configuration ---
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-API_KEY = "AIzaSyDB3Lz1yH2SLn-LzlE20z_DmGWazsKZgWM"
+# Load the API key from Streamlit's secrets
+API_KEY = st.secrets["GEMINI_API_KEY"]
+
 
 # Set page config
 st.set_page_config(
