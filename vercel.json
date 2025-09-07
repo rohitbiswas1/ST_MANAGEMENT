@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "ST_MANAGEMENT.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "ST_MANAGEMENT.py"
+    }
+  ]
+}
